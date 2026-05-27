@@ -1,0 +1,47 @@
+# Configuration (contains real AWS account IDs / certificate ARNs)
+config.ini
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment (any depth)
+**/.venv/
+**/venv/
+**/ENV/
+
+# Node
+**/node_modules/
+
+# CDK
+**/cdk.out/
+**/.cdk.staging/
+
+# Tooling caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Excluded examples (LWA has known issues with nginx in Lambda)
+examples/nginx-demo/
+
+# Local logs / temp output
+*.log
+/tmp/
