@@ -108,6 +108,15 @@ class ReservedRuntimeStack(Stack):
             "echo 'ECS_NUM_IMAGES_DELETE_PER_CYCLE=5' >> /etc/ecs/ecs.config",
             # Widen the ephemeral range so bridge dynamic host ports don't exhaust.
             "sysctl -w net.ipv4.ip_local_port_range='16384 65535' || true",
+            # ROOT-CAUSE FIX for high-density bridge port collisions:
+            # disable Docker's userland-proxy. With bridge + hundreds of dynamic
+            # host ports, docker-proxy spawns a process per port and races on
+            # bind(), causing "address already in use" (observed at ~200 tasks).
+            # AWS docs explicitly recommend turning it off with many ports; iptables
+            # DNAT then handles port forwarding without a per-port userland process.
+            "mkdir -p /etc/docker",
+            "echo '{\"userland-proxy\": false}' > /etc/docker/daemon.json",
+            "systemctl restart docker || service docker restart || true",
         )
 
         asg = autoscaling.AutoScalingGroup(

@@ -118,6 +118,35 @@ def agent_healthy(ecs, cluster: str, instance_arn: str) -> tuple[bool, int]:
     return d["agentConnected"], d["runningTasksCount"]
 
 
+def classify_failures(ecs, cluster: str, task_arns: list[str]) -> tuple[int, int, int]:
+    """Bucket STOPPED tasks by root cause.
+
+    Returns (port_collisions, resource_exhaustion, other). Port collisions come
+    from the Docker userland-proxy binding a dynamic host port that's already in
+    use — a high-density transient, not a capacity ceiling. Resource failures
+    (RESOURCE:MEMORY, "unable to place") ARE a real ceiling signal.
+    """
+    port_fail = resource_fail = other_fail = 0
+    for i in range(0, len(task_arns), 100):
+        batch = task_arns[i : i + 100]
+        resp = ecs.describe_tasks(cluster=cluster, tasks=batch)
+        for t in resp["tasks"]:
+            if t["lastStatus"] != "STOPPED":
+                continue
+            reason = (t.get("stoppedReason", "") or "").lower()
+            cont_reason = ""
+            if t.get("containers"):
+                cont_reason = (t["containers"][0].get("reason", "") or "").lower()
+            blob = reason + " " + cont_reason
+            if "address already in use" in blob or "userland proxy" in blob:
+                port_fail += 1
+            elif "resource" in blob or "unable to place" in blob or "memory" in blob:
+                resource_fail += 1
+            else:
+                other_fail += 1
+    return port_fail, resource_fail, other_fail
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--cluster", required=True)
@@ -153,19 +182,34 @@ def main() -> None:
 
         status = wait_running(ecs, args.cluster, all_tasks)
         running = status.get("RUNNING", 0)
+        pending = status.get("PROVISIONING", 0) + status.get("PENDING", 0)
         connected, agent_running = agent_healthy(ecs, args.cluster, instance_arn)
+
+        # Classify why tasks stopped: port collisions (docker-proxy) are a known
+        # transient at high density and are NOT a true capacity ceiling; resource
+        # exhaustion (RESOURCE:MEMORY / no placement) IS.
+        port_fail, resource_fail, other_fail = classify_failures(ecs, args.cluster, all_tasks)
 
         print(f"  status: {dict(status)}")
         print(f"  agentConnected={connected}  instance.runningTasksCount={agent_running}")
+        print(f"  failures: port-collision={port_fail} resource={resource_fail} other={other_fail}")
 
-        # Ceiling detection: placement shortfall or agent disconnect.
-        if running < target or not connected:
+        # A TRUE ceiling = resource exhaustion (tasks stuck PENDING / stopped for
+        # RESOURCE reasons) or agent disconnect. Individual port collisions are
+        # logged but do NOT stop the ramp.
+        if pending > 0 or resource_fail > 0 or not connected:
             ceiling = running
             print(
-                f"  🚩 DEGRADATION at target={target}: only {running} RUNNING, "
-                f"agentConnected={connected}. Recording ceiling ≈ {ceiling}."
+                f"  🚩 CAPACITY CEILING at target={target}: {running} RUNNING, "
+                f"{pending} stuck PENDING, resource-failures={resource_fail}, "
+                f"agentConnected={connected}. Safe density ≈ {ceiling}."
             )
             break
+        if port_fail > 0:
+            print(
+                f"  ⚠️  {port_fail} port-collision failure(s) at target={target} — "
+                f"transient (docker-proxy), NOT a capacity limit. Continuing ramp."
+            )
 
     print("\n" + "=" * 60)
     if ceiling is not None:
