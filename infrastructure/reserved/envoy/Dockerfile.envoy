@@ -1,10 +1,12 @@
 # Envoy image for Reserved Mode multi-tenant routing (subsystem B).
 # Bakes the bootstrap config; tenant routes/clusters arrive via filesystem xDS
 # written into /etc/envoy-dynamic by the route-sync sidecar (shared volume).
+#
+# The shared volume mount HIDES any files baked here, so route-sync seeds
+# cds.yaml/rds.yaml at runtime. The entrypoint waits for those files to appear
+# before starting Envoy (Envoy exits if the xDS paths don't exist at boot).
 FROM envoyproxy/envoy:v1.31-latest
 COPY bootstrap.yaml /etc/envoy/bootstrap.yaml
-# Seed empty dynamic files so Envoy starts cleanly before the first sync.
-RUN mkdir -p /etc/envoy-dynamic \
-    && printf 'resources: []\n' > /etc/envoy-dynamic/cds.yaml \
-    && printf 'resources:\n  - "@type": type.googleapis.com/envoy.config.route.v3.RouteConfiguration\n    name: tenant_routes\n    virtual_hosts: []\n' > /etc/envoy-dynamic/rds.yaml
-CMD ["envoy", "-c", "/etc/envoy/bootstrap.yaml", "--service-cluster", "reserved-envoy"]
+RUN printf '#!/bin/sh\nset -e\ni=0\nwhile [ ! -f /etc/envoy-dynamic/cds.yaml ] || [ ! -f /etc/envoy-dynamic/rds.yaml ]; do\n  i=$((i+1)); [ "$i" -gt 60 ] && echo "timed out waiting for xDS seed files" && exit 1\n  echo "waiting for route-sync to seed xDS config..."; sleep 1\ndone\nexec envoy -c /etc/envoy/bootstrap.yaml --service-cluster reserved-envoy\n' > /wait-and-run.sh \
+    && chmod +x /wait-and-run.sh
+ENTRYPOINT ["/wait-and-run.sh"]

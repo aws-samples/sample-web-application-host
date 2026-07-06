@@ -112,7 +112,14 @@ def atomic_write(path: str, content: str) -> None:
 
 def main() -> None:
     os.makedirs(CONFIG_DIR, exist_ok=True)
-    last_signature = None
+    # Seed empty config IMMEDIATELY so Envoy (which shares this volume and requires
+    # the files to exist at startup) can boot before the first DynamoDB poll. The
+    # shared volume mount hides any files baked into the Envoy image, so seeding
+    # must happen here at runtime.
+    atomic_write(os.path.join(CONFIG_DIR, "cds.yaml"), render_cds([]))
+    atomic_write(os.path.join(CONFIG_DIR, "rds.yaml"), render_rds([]))
+    print(f"[route-sync] seeded empty config in {CONFIG_DIR}", flush=True)
+    last_signature = ()  # matches the empty seed we just wrote
     print(f"[route-sync] polling {TABLE} every {POLL}s -> {CONFIG_DIR}", flush=True)
     while True:
         try:

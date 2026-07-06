@@ -2,6 +2,14 @@
 # Static listener (stable — no connection drain on route change); tenant routes
 # and clusters come from filesystem dynamic config (RDS/CDS) that route_sync.py
 # regenerates from the app_routes DynamoDB table. Spec ADR-5 "xDS-over-file".
+
+# node id/cluster are REQUIRED when using dynamic (xDS) config sources, including
+# filesystem path_config_source. Without them Envoy exits: "node 'id' and
+# 'cluster' are required".
+node:
+  id: reserved-envoy-1
+  cluster: reserved-envoy
+
 admin:
   address:
     socket_address: { address: 0.0.0.0, port_value: 9901 }
