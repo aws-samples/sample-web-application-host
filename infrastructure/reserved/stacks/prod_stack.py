@@ -102,8 +102,13 @@ class ReservedProdStack(Stack):
             user_data=user_data,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
         )
+        # Disable managed scaling so the ASG desired_capacity we set is respected.
+        # (With managed scaling ON, ECS zeroes the ASG to 0 and only scales on a
+        # capacity-provider strategy signal — which left the cluster at 0 instances.)
+        # For this fixed-size cluster we manage capacity directly via the ASG.
         capacity_provider = ecs.AsgCapacityProvider(
             self, "CapacityProvider", auto_scaling_group=asg,
+            enable_managed_scaling=False,
             enable_managed_termination_protection=False)
         cluster.add_asg_capacity_provider(capacity_provider)
 
