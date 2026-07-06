@@ -182,11 +182,14 @@ class ReservedProdStack(Stack):
         envoy.add_container_dependencies(ecs.ContainerDependency(
             container=sync, condition=ecs.ContainerDependencyCondition.START))
 
+        # No circuit breaker: with managed_scaling disabled the instance launches
+        # at CREATE and Envoy places promptly, so the fast-fail isn't needed here.
+        # More importantly, a triggered rollback leaves the CloudFront VPC Origin
+        # stuck mid-create (undeletable), which turns a recoverable slow-start into
+        # a ROLLBACK_FAILED requiring manual VPC-Origin surgery. Prefer a clean run.
         envoy_service = ecs.Ec2Service(
             self, "EnvoyService", cluster=cluster, task_definition=envoy_task_def,
-            desired_count=1, min_healthy_percent=0, max_healthy_percent=100,
-            # Fail fast instead of a 3h CloudFormation wait if Envoy can't start.
-            circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=False))
+            desired_count=1, min_healthy_percent=0, max_healthy_percent=100)
 
         # ------------------------------------------------------------------
         # internal NLB (L4/TCP) → Envoy. NLB needs an SG to be a VPC Origin.
