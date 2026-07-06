@@ -1,0 +1,11 @@
+# CDK build/output artifacts
+cdk.out
+.cdk.staging
+
+# CDK context cache — contains account-specific lookups (account id, AZs). Regenerated.
+cdk.context.json
+
+# Python
+__pycache__
+*.pyc
+.venv
