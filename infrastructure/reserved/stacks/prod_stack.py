@@ -34,6 +34,9 @@ from aws_cdk import (
     aws_iam as iam,
     aws_logs as logs,
     aws_ecr as ecr,
+    aws_cloudfront as cloudfront,
+    aws_cloudfront_origins as origins,
+    aws_certificatemanager as acm,
 )
 from constructs import Construct
 
@@ -212,15 +215,50 @@ class ReservedProdStack(Stack):
         asg.connections.allow_from(nlb_sg, ec2.Port.tcp(envoy_host_port), "NLB to Envoy")
         # NLB (with SG) also health-checks targets from the NLB SG; same rule covers it.
 
-        # Expose the NLB for the edge stack (CloudFront VPC Origin lives there).
-        # CloudFront is deliberately in a SEPARATE stack: a CloudFront VPC Origin
-        # that gets cancelled mid-create (by ANY unrelated failure in this large
-        # stack — e.g. EC2 API throttling on the launch template) becomes stuck and
-        # undeletable, forcing ROLLBACK_FAILED surgery. Isolating the edge means
-        # core failures never strand a VPC Origin, and the VPC Origin only ever
-        # associates with an already-stable NLB.
-        self.nlb = nlb
-        self.nlb_sg = nlb_sg  # edge stack adds the CloudFront→NLB:80 ingress here
+        # ------------------------------------------------------------------
+        # Edge: CloudFront (VPC Origin → NLB) + Host-forwarding policy (ADR-2).
+        # Folded back into this single stack per request. NOTE: the historical
+        # reason to split was that a VPC Origin cancelled mid-create becomes stuck
+        # and undeletable. That risk is mitigated here by: (a) all root-cause
+        # deploy fixes are in place (managed_scaling off, no circuit breaker,
+        # correct CDK version), and (b) the explicit Distribution→NLB dependency
+        # below, so the VPC Origin only associates once the NLB exists.
+        # ------------------------------------------------------------------
+        # Open the NLB SG to CloudFront VPC Origin traffic on :80. CDK's VpcOrigin
+        # does NOT do this automatically; without it origin requests time out (000).
+        cf_prefix_list = config.get(
+            "CloudFront", "origin_facing_prefix_list", "APP_CF_ORIGIN_PREFIX_LIST",
+            fallback="pl-3b927c52")  # com.amazonaws.global.cloudfront.origin-facing (us-east-1)
+        nlb_sg.add_ingress_rule(
+            ec2.Peer.prefix_list(cf_prefix_list), ec2.Port.tcp(80),
+            "CloudFront VPC Origin to NLB")
+
+        cert = acm.Certificate.from_certificate_arn(
+            self, "Cert", config.get("CloudFront", "certificate_arn", "APP_CERTIFICATE_ARN"))
+        domain = config.get("CloudFront", "domain_name", "APP_DOMAIN_NAME")
+
+        vpc_origin = origins.VpcOrigin.with_network_load_balancer(
+            nlb, protocol_policy=cloudfront.OriginProtocolPolicy.HTTP_ONLY, http_port=80)
+
+        orp = cloudfront.OriginRequestPolicy(
+            self, "ForwardHost", origin_request_policy_name="ReservedForwardHost",
+            header_behavior=cloudfront.OriginRequestHeaderBehavior.all(),
+            cookie_behavior=cloudfront.OriginRequestCookieBehavior.all(),
+            query_string_behavior=cloudfront.OriginRequestQueryStringBehavior.all())
+
+        distribution = cloudfront.Distribution(
+            self, "Cdn",
+            default_behavior=cloudfront.BehaviorOptions(
+                origin=vpc_origin,
+                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
+                cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,  # dynamic tenants
+                origin_request_policy=orp),
+            domain_names=[domain], certificate=cert,
+            minimum_protocol_version=cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021)
+        # Explicit dependency: the CloudFront distribution/VPC Origin must not be
+        # created until the NLB and its listener exist.
+        distribution.node.add_dependency(nlb_listener)
 
         # ------------------------------------------------------------------
         # Tenant app task def (distinguishable nginx: returns tenant_id+hostname).
@@ -248,3 +286,6 @@ class ReservedProdStack(Stack):
         CfnOutput(self, "TenantTaskFamily", value=tenant_task_def.family)
         CfnOutput(self, "NlbDnsName", value=nlb.load_balancer_dns_name)
         CfnOutput(self, "EnvoyHostPort", value=str(envoy_host_port))
+        CfnOutput(self, "CloudFrontDomain", value=distribution.distribution_domain_name)
+        CfnOutput(self, "DnsTarget",
+                  value=f"CNAME {domain.lstrip('*.')} -> {distribution.distribution_domain_name}")
