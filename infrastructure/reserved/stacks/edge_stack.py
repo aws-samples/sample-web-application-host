@@ -17,6 +17,7 @@ from aws_cdk import (
     Stack,
     CfnOutput,
     Tags,
+    aws_ec2 as ec2,
     aws_cloudfront as cloudfront,
     aws_cloudfront_origins as origins,
     aws_certificatemanager as acm,
@@ -28,11 +29,25 @@ from constructs import Construct
 class ReservedEdgeStack(Stack):
     """CloudFront (VPC Origin → NLB) + Host-forwarding Origin Request Policy."""
 
-    def __init__(self, scope: Construct, construct_id: str, config, nlb, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, config, nlb, nlb_sg, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         for k, v in config.get_tags().items():
             Tags.of(self).add(k, v)
+
+        # CRITICAL: allow CloudFront VPC Origin traffic into the NLB on :80.
+        # CDK's VpcOrigin construct does NOT open the NLB SG automatically, so
+        # without this the NLB SG has no inbound rule and CloudFront origin
+        # requests time out (HTTP 000). Source = the CloudFront origin-facing
+        # managed prefix list (stable, referenceable), which covers the
+        # service-managed CloudFront-VPCOrigins ENIs.
+        cf_prefix_list = config.get(
+            "CloudFront", "origin_facing_prefix_list", "APP_CF_ORIGIN_PREFIX_LIST",
+            fallback="pl-3b927c52")  # com.amazonaws.global.cloudfront.origin-facing (us-east-1)
+        nlb_sg.add_ingress_rule(
+            ec2.Peer.prefix_list(cf_prefix_list),
+            ec2.Port.tcp(80),
+            "CloudFront VPC Origin to NLB")
 
         cert = acm.Certificate.from_certificate_arn(
             self, "Cert", config.get("CloudFront", "certificate_arn", "APP_CERTIFICATE_ARN"))

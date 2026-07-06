@@ -40,7 +40,7 @@ def main() -> None:
         app,
         config.get("Reserved", "edge_stack_name", "APP_RESERVED_EDGE_STACK",
                    fallback="ReservedEdgeStack"),
-        config=config, env=env, nlb=core.nlb,
+        config=config, env=env, nlb=core.nlb, nlb_sg=core.nlb_sg,
         description="Reserved Mode edge: CloudFront (VPC Origin) -> core NLB",
     )
     edge.add_dependency(core)  # edge (CloudFront VPC Origin) waits for a stable NLB

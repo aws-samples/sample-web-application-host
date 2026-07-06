@@ -220,6 +220,7 @@ class ReservedProdStack(Stack):
         # core failures never strand a VPC Origin, and the VPC Origin only ever
         # associates with an already-stable NLB.
         self.nlb = nlb
+        self.nlb_sg = nlb_sg  # edge stack adds the CloudFront→NLB:80 ingress here
 
         # ------------------------------------------------------------------
         # Tenant app task def (distinguishable nginx: returns tenant_id+hostname).
