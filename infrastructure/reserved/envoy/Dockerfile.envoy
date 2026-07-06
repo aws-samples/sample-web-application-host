@@ -1,0 +1,10 @@
+# Envoy image for Reserved Mode multi-tenant routing (subsystem B).
+# Bakes the bootstrap config; tenant routes/clusters arrive via filesystem xDS
+# written into /etc/envoy-dynamic by the route-sync sidecar (shared volume).
+FROM envoyproxy/envoy:v1.31-latest
+COPY bootstrap.yaml /etc/envoy/bootstrap.yaml
+# Seed empty dynamic files so Envoy starts cleanly before the first sync.
+RUN mkdir -p /etc/envoy-dynamic \
+    && printf 'resources: []\n' > /etc/envoy-dynamic/cds.yaml \
+    && printf 'resources:\n  - "@type": type.googleapis.com/envoy.config.route.v3.RouteConfiguration\n    name: tenant_routes\n    virtual_hosts: []\n' > /etc/envoy-dynamic/rds.yaml
+CMD ["envoy", "-c", "/etc/envoy/bootstrap.yaml", "--service-cluster", "reserved-envoy"]

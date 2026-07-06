@@ -1,0 +1,40 @@
+# Envoy bootstrap for Reserved Mode multi-tenant routing (subsystem B).
+# Static listener (stable — no connection drain on route change); tenant routes
+# and clusters come from filesystem dynamic config (RDS/CDS) that route_sync.py
+# regenerates from the app_routes DynamoDB table. Spec ADR-5 "xDS-over-file".
+admin:
+  address:
+    socket_address: { address: 0.0.0.0, port_value: 9901 }
+
+dynamic_resources:
+  # Clusters (one per tenant) come from a filesystem file that route_sync rewrites.
+  cds_config:
+    path_config_source:
+      path: /etc/envoy-dynamic/cds.yaml
+      watched_directory: { path: /etc/envoy-dynamic }
+
+static_resources:
+  listeners:
+    - name: ingress
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 10000 }
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                # Route config (virtual hosts per tenant) from filesystem RDS.
+                rds:
+                  route_config_name: tenant_routes
+                  config_source:
+                    path_config_source:
+                      path: /etc/envoy-dynamic/rds.yaml
+                      watched_directory: { path: /etc/envoy-dynamic }
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                # WebSocket support end-to-end (test MT-7).
+                upgrade_configs:
+                  - upgrade_type: websocket

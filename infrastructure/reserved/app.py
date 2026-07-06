@@ -15,6 +15,7 @@ from aws_cdk import App, Environment
 
 from config_loader import ReservedConfig
 from stacks.runtime_stack import ReservedRuntimeStack
+from stacks.multitenant_test_stack import ReservedMultiTenantTestStack
 
 
 def main() -> None:
@@ -35,6 +36,19 @@ def main() -> None:
         config=config,
         env=env,
         description="Reserved Mode subsystem C: ECS on EC2 runtime for density validation",
+    )
+
+    # Subsystem B + test ingress for multi-tenant access tests. Deploys into the
+    # runtime cluster/VPC (imported), so deploy ReservedRuntimeStack first.
+    ReservedMultiTenantTestStack(
+        app,
+        config.get(
+            "Reserved", "test_stack_name", "APP_RESERVED_TEST_STACK",
+            fallback="ReservedMultiTenantTestStack",
+        ),
+        config=config,
+        env=env,
+        description="Reserved Mode subsystem B: Envoy L7 routing + public ALB for multi-tenant tests",
     )
 
     app.synth()

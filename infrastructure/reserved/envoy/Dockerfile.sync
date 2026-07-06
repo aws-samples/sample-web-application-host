@@ -1,0 +1,7 @@
+# Route-sync sidecar image (subsystem B). Polls app_routes DynamoDB and writes
+# Envoy filesystem xDS to the shared /etc/envoy-dynamic volume. boto3 baked in
+# so there is no runtime pip install (faster, offline-safe).
+FROM public.ecr.aws/docker/library/python:3.12-slim
+RUN pip install --no-cache-dir boto3
+COPY route_sync.py /sync/route_sync.py
+CMD ["python", "/sync/route_sync.py"]
