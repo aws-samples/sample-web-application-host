@@ -17,17 +17,24 @@ Usage:
 import argparse
 import concurrent.futures
 import json
+import subprocess
 import sys
-import urllib.request
 
 
 def fetch(alb: str, host: str, path: str = "/") -> tuple[int, str]:
-    req = urllib.request.Request(f"http://{alb}{path}", headers={"Host": host})
+    """Fetch via curl (not urllib): this pyenv's hashlib lacks blake2, which
+    breaks urllib's TLS on HTTPS. curl is unaffected. `host` is the tenant
+    subdomain FQDN; we hit it directly over HTTPS through the real domain."""
+    url = f"https://{host}{path}"
     try:
-        with urllib.request.urlopen(req, timeout=10) as r:
-            return r.status, r.read().decode()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode(errors="replace")
+        out = subprocess.run(
+            ["curl", "-s", "-w", "\n%{http_code}", "--max-time", "20", url],
+            capture_output=True, text=True, timeout=25)
+        parts = out.stdout.rsplit("\n", 1)
+        if len(parts) == 2:
+            body, code = parts
+            return int(code) if code.isdigit() else 0, body
+        return 0, out.stdout
     except Exception as e:  # noqa: BLE001
         return 0, str(e)
 

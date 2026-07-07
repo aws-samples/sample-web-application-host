@@ -18,22 +18,27 @@ Requires an 'echo' tenant registered (ealen/echo-server). Run:
 """
 import argparse
 import json
+import subprocess
 import sys
-import urllib.request
-import urllib.error
 
 
 def do(host, method="GET", path="/", headers=None, data=None):
+    """Issue the request via curl (this pyenv's hashlib lacks blake2, breaking
+    urllib TLS). Builds a curl command with method/headers/body."""
     url = f"https://{host}{path}"
-    req = urllib.request.Request(url, method=method, data=data)
+    cmd = ["curl", "-s", "-X", method, "-w", "\n%{http_code}", "--max-time", "25"]
     for k, v in (headers or {}).items():
-        req.add_header(k, v)
+        cmd += ["-H", f"{k}: {v}"]
+    if data is not None:
+        cmd += ["--data-binary", data.decode() if isinstance(data, bytes) else data]
+    cmd.append(url)
     try:
-        with urllib.request.urlopen(req, timeout=25) as r:
-            body = r.read().decode(errors="replace")
-            return r.status, body
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode(errors="replace")
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        parts = out.stdout.rsplit("\n", 1)
+        if len(parts) == 2:
+            body, code = parts
+            return (int(code) if code.isdigit() else 0), body
+        return 0, out.stdout
     except Exception as e:  # noqa: BLE001
         return 0, str(e)
 
