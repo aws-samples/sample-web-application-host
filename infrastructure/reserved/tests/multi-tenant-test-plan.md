@@ -152,7 +152,7 @@ Envoy (L7, 按 Host 路由)  ──读──> DynamoDB app_routes
 - **租户 app 镜像**：`public.ecr.aws/nginx/nginx:stable`（arm64 多架构），entrypoint 覆盖：
   `sh -c 'echo "{\"tenant_id\":\"$TENANT_ID\",\"hostname\":\"$HOSTNAME\"}" > /usr/share/nginx/html/index.html; nginx -g "daemon off;"'`
 - **租户规模**：功能用例 N=10；高密度用例 N=200。
-- **测试域名**：使用 `*.webhost.jaydencrazy.win`（已有 ACM 证书）或 ALB 原生 DNS + Host 头注入。
+- **测试域名**：使用 `*.example.com`（已有 ACM 证书）或 ALB 原生 DNS + Host 头注入。
 
 ---
 

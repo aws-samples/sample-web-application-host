@@ -11,7 +11,7 @@
 #
 # Usage: ./test_streaming.sh [host]
 set -u
-HOST="${1:-stream.webhost.jaydencrazy.win}"
+HOST="${1:-stream.example.com}"
 
 echo "=== Streaming test: chunk arrival timing over $HOST/sse ==="
 echo "PASS if chunks arrive ~1s apart (streamed); FAIL if all land at the end (buffered)."

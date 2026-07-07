@@ -27,7 +27,7 @@ TABLE = os.environ["APP_ROUTES_TABLE"]
 REGION = os.environ.get("AWS_REGION", "us-east-1")
 CONFIG_DIR = os.environ.get("ENVOY_CONFIG_DIR", "/etc/envoy-dynamic")
 POLL = int(os.environ.get("POLL_INTERVAL_SECONDS", "3"))
-DOMAIN = os.environ.get("TENANT_DOMAIN", "webhost.jaydencrazy.win")
+DOMAIN = os.environ.get("TENANT_DOMAIN", "example.com")
 
 ddb = boto3.client("dynamodb", region_name=REGION)
 

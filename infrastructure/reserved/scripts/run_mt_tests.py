@@ -11,7 +11,7 @@ Covers:
 Assertion: response JSON tenant_id == requested Host subdomain.
 
 Usage:
-  python run_mt_tests.py --alb <alb-dns> --domain webhost.jaydencrazy.win \
+  python run_mt_tests.py --alb <alb-dns> --domain example.com \
       --tenants 10 --concurrency 100
 """
 import argparse
@@ -91,7 +91,7 @@ def mt4_unregistered(alb: str, domain: str) -> bool:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--alb", required=True, help="ALB DNS name")
-    p.add_argument("--domain", default="webhost.jaydencrazy.win")
+    p.add_argument("--domain", default="example.com")
     p.add_argument("--tenants", type=int, default=10)
     p.add_argument("--concurrency", type=int, default=100)
     args = p.parse_args()

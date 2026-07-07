@@ -9,7 +9,7 @@
 ## 架构（生产链路）
 
 ```
-用户浏览器  https://<subdomain>.webhost.jaydencrazy.win
+用户浏览器  https://<subdomain>.example.com
       │  viewer TLS 在 CloudFront 终止
       ▼
 CloudFront (CDN)                         公网唯一入口
@@ -103,13 +103,13 @@ python scripts/register_tenants.py --cluster reserved-mode-cluster \
     --task-def reserved-tenant-app --table reserved-app-routes --count 10
 
 # 多租户路由：MT-1 正确性 / MT-2 隔离(并发0串扰) / MT-4 未注册404
-python scripts/run_mt_tests.py --domain webhost.jaydencrazy.win --tenants 10 --concurrency 50
+python scripts/run_mt_tests.py --domain example.com --tenants 10 --concurrency 50
 
 # 复杂请求透传 20 项（需 echo 租户，见 IMPLEMENTATION-NOTES）
-python scripts/test_passthrough.py --host echo.webhost.jaydencrazy.win
+python scripts/test_passthrough.py --host echo.example.com
 
 # 流式 SSE（需 stream 租户）
-bash scripts/test_streaming.sh stream.webhost.jaydencrazy.win
+bash scripts/test_streaming.sh stream.example.com
 
 # 子系统 C 密度压测（单机安全密度）
 python scripts/density_test.py --cluster reserved-mode-cluster --task-def <idle-family> --steps 100,200,300,400

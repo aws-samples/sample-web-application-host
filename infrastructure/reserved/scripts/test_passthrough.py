@@ -14,7 +14,7 @@ verify that each layer preserves a real browser-grade request. Checks:
   * Host header integrity (tenant routing correctness)
 
 Requires an 'echo' tenant registered (ealen/echo-server). Run:
-  python test_passthrough.py --host echo.webhost.jaydencrazy.win
+  python test_passthrough.py --host echo.example.com
 """
 import argparse
 import json
@@ -57,7 +57,7 @@ def check(name, cond, detail=""):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--host", default="echo.webhost.jaydencrazy.win")
+    p.add_argument("--host", default="echo.example.com")
     args = p.parse_args()
     H = args.host
     results = []

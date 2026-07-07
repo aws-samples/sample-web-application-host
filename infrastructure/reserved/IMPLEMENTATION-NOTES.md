@@ -1,8 +1,8 @@
 # Reserved Mode — Implementation Notes (real-deploy learnings)
 
 Hard-won operational knowledge from actually deploying the production link to a
-live account (918380168589 / us-east-1). These are things the design spec did NOT
-capture but that will bite anyone who deploys this. Keep alongside the code.
+live account in us-east-1. These are things the design spec did NOT capture but
+that will bite anyone who deploys this. Keep alongside the code.
 
 ## Toolchain requirements
 
